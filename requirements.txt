@@ -1,0 +1,11 @@
+streamlit==1.32.2
+beautifulsoup4
+python-docx
+pandas
+pypdf
+requests
+scikit-learn
+openpyxl
+# optional layers (not needed for the default hardened mode):
+#   transformers torch        -> neural guard (PIGuard) on retrieved chunks
+#   pytesseract pillow        -> OCR consistency check (also needs poppler-utils + tesseract-ocr)
