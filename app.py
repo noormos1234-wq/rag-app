@@ -41,6 +41,19 @@ def get_groq_model() -> str:
  
  
 ACTIVE_MODEL = get_groq_model()
+
+
+# --- Local / self-hosted model (any OpenAI-compatible server: Ollama, vLLM, llama.cpp, LM Studio) ---
+def _cfg(name: str, default: str = "") -> str:
+  try:
+    return str(st.secrets[name]).strip() or default
+  except Exception:
+    return os.environ.get(name, default).strip() or default
+
+
+LOCAL_BASE_URL = _cfg("LLM_BASE_URL", "http://localhost:11434/v1").rstrip("/")   # Ollama default
+LOCAL_MODEL = _cfg("LLM_MODEL", "llama3.1:8b")
+LOCAL_API_KEY = _cfg("LLM_API_KEY", "")   # usually empty for a private server
  
 # --- إعدادات المستندات الكبيرة ---
 CHARS_PER_PAGE = 3000   # تقدير: صفحة Word تقريبًا 500 كلمة = 3000 حرف
@@ -378,6 +391,27 @@ class CompleteMasterRAGSystem:
     best = [int(i) for i in order if sims[i] > 0] or [int(sims.argmax())]
     return [self.chunks[i] for i in best]
 
+  def call_local_llm(self, prompt) -> str:
+    """Chat completion against a self-hosted OpenAI-compatible server (Ollama / vLLM ...).
+    The address comes only from LLM_BASE_URL (environment / secrets), never from the UI."""
+    messages = prompt if isinstance(prompt, list) else [{"role": "user", "content": prompt}]
+    headers = {"Content-Type": "application/json"}
+    if LOCAL_API_KEY:
+      headers["Authorization"] = f"Bearer {LOCAL_API_KEY}"
+    payload = {"model": LOCAL_MODEL, "messages": messages, "temperature": 0.0, "stream": False}
+    try:
+      response = requests.post(f"{LOCAL_BASE_URL}/chat/completions", json=payload, headers=headers, timeout=300)
+    except Exception as e:
+      return (f"❌ Cannot reach the local LLM server at {LOCAL_BASE_URL} ({e}). Start it first "
+              f"(e.g. `ollama serve` and `ollama pull {LOCAL_MODEL}`), or set LLM_BASE_URL.")
+    if response.status_code != 200:
+      return f"❌ Local LLM error ({response.status_code}): {response.text[:500]}"
+    try:
+      content = response.json()["choices"][0]["message"].get("content") or ""
+    except Exception as e:
+      return f"❌ Unexpected response from the local LLM server: {e}"
+    return content.strip() or "ℹ️ The model returned an empty response."
+
   def call_groq_api(self, prompt) -> str:
     """`prompt` is a plain string (legacy levels) or a list of chat messages (hardened)."""
     messages = prompt if isinstance(prompt, list) else [{"role": "user", "content": prompt}]
@@ -503,6 +537,7 @@ with col1:
       "Select LLM Provider",
       [
           f"Groq API Cloud LLM ({ACTIVE_MODEL})",
+          f"Local LLM server ({LOCAL_MODEL})",
           "Prompt Generation Only (Recommended for Thesis Evaluation)",
       ],
   )
@@ -646,8 +681,11 @@ with col2:
       )
 
       llm_response = ""
-      if "Groq API Cloud LLM" in llm_choice:
-        llm_response = system_engine.call_groq_api(llm_input)
+      if "Groq API Cloud LLM" in llm_choice or "Local LLM server" in llm_choice:
+        if "Local LLM server" in llm_choice:
+          llm_response = system_engine.call_local_llm(llm_input)
+        else:
+          llm_response = system_engine.call_groq_api(llm_input)
         if hardened and not llm_response.startswith(("❌", "ℹ️")):
           llm_response, output_flags = system_engine.security_middleware.validate_output(
               llm_response, retrieved_context + "\n" + query_box, canary)
