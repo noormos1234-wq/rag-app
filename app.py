@@ -200,7 +200,7 @@ class CompleteMasterRAGSystem:
     except Exception as e:
       return ERR_PREFIX + f"Error reading Word document: {e}", 0, False
  
-  def extract_pdf_hardened(self, uploaded_file, ocr: bool = False) -> Tuple[str, int, bool]:
+  def extract_pdf_hardened(self, uploaded_file) -> Tuple[str, int, bool]:
     """Extractor-aware PDF reading: hidden text (white / tiny / off-page / invisible) is
     quarantined instead of reaching the index."""
     if uploaded_file is None:
@@ -210,11 +210,6 @@ class CompleteMasterRAGSystem:
       text, pages, offsets, hidden, info = D.analyze_pdf(io.BytesIO(raw))
       if pages > 0 and not text.strip():
         return ERR_PREFIX + "Error reading PDF: no extractable text (the file may be scanned images).", 0, True
-      if ocr:
-        per_page = [text[offsets[i]:(offsets[i + 1] if i + 1 < len(offsets) else len(text))] for i in range(len(offsets))]
-        extra, note = D.ocr_consistency_pdf(raw, per_page)
-        hidden += extra
-        self.extractor_notes.append(note)
       if info.get("javascript"):
         self.extractor_notes.append("PDF contains JavaScript (never executed by this app).")
       if info.get("embedded_files"):
@@ -501,12 +496,10 @@ with col1:
       ),
   )
   defense_level = {"H": "hardened", "E": "extended", "B": "baseline"}[level_label[0]]
-  datamark = ocr_check = use_neural = allow_remote_code = allow_quotes = False
+  datamark = use_neural = allow_remote_code = allow_quotes = False
   if defense_level == "hardened":
     with st.expander("Hardened options"):
       datamark = st.checkbox("Datamarking (Spotlighting): mark untrusted words with 'ˆ'", value=False)
-      ocr_check = st.checkbox(
-          "OCR consistency check for PDFs (slow, needs poppler + tesseract)", value=False)
       allow_quotes = st.checkbox(
           "Allow quoted examples in text that discusses attacks (fewer false alarms, slightly weaker)",
           value=False,
@@ -573,7 +566,7 @@ with col2:
       with st.spinner("Reading document..."):
         if file_name.endswith(".pdf"):
           file_text, doc_pages, pages_exact = (
-              system_engine.extract_pdf_hardened(uploaded_file, ocr=ocr_check) if hardened
+              system_engine.extract_pdf_hardened(uploaded_file) if hardened
               else system_engine.extract_pdf_content(uploaded_file))
         elif file_name.endswith(".docx"):
           file_text, doc_pages, pages_exact = (
