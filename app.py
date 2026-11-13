@@ -79,12 +79,13 @@ class CompleteMasterRAGSystem:
     self.scan_only: list = []      # hidden channels (metadata, alt text, comments) - scanned, never indexed
     self.extractor_notes: list = []
 
-  def configure_defense(self, level: str, neural=None, heur_threshold: int = 4):
+  def configure_defense(self, level: str, neural=None, heur_threshold: int = 4, allow_quotes: bool = False):
     """level: baseline | extended | hardened"""
     self.defense_level = level
     self.structural, self.scan_only, self.extractor_notes = [], [], []
     if level == "hardened":
-      self.security_middleware = HardenedMiddleware(heur_threshold=heur_threshold, neural=neural)
+      self.security_middleware = HardenedMiddleware(heur_threshold=heur_threshold, neural=neural,
+                                                    allow_quoted_mentions=allow_quotes)
     else:
       self.security_middleware = SecurityMiddleware(extended=(level == "extended"))
     self.page_offsets: List[int] = []
@@ -466,12 +467,17 @@ with col1:
       ),
   )
   defense_level = {"H": "hardened", "E": "extended", "B": "baseline"}[level_label[0]]
-  datamark = ocr_check = use_neural = allow_remote_code = False
+  datamark = ocr_check = use_neural = allow_remote_code = allow_quotes = False
   if defense_level == "hardened":
     with st.expander("Hardened options"):
       datamark = st.checkbox("Datamarking (Spotlighting): mark untrusted words with 'ˆ'", value=False)
       ocr_check = st.checkbox(
           "OCR consistency check for PDFs (slow, needs poppler + tesseract)", value=False)
+      allow_quotes = st.checkbox(
+          "Allow quoted examples in text that discusses attacks (fewer false alarms, slightly weaker)",
+          value=False,
+          help="Keeps a phrase such as \"ignore previous instructions\" when it appears inside quotation marks "
+               "in a sentence about injection/attacks (e.g. a thesis or article). It is still shown in Scan Findings.")
       use_neural = st.checkbox(
           "Neural guard on retrieved chunks (PIGuard, needs transformers + torch)", value=False)
       if use_neural:
@@ -524,7 +530,7 @@ with col2:
       if neural is None or neural.allow_remote_code != allow_remote_code:
         neural = NeuralGuard(allow_remote_code=allow_remote_code)
         st.session_state["neural_guard"] = neural
-    system_engine.configure_defense(defense_level, neural=neural)
+    system_engine.configure_defense(defense_level, neural=neural, allow_quotes=allow_quotes)
  
     if uploaded_file is not None:
       source_doc_name = uploaded_file.name

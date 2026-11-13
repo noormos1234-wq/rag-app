@@ -321,7 +321,7 @@ _STRONG = (
 _WEAK = (
     "share|post|upload|run|invoke|visit|click|navigate|fetch|download|install|reply|"
     "respond|answer|output|print|say|write|append|insert|display|repeat|show|open|call|"
-    "mail|remove|book|add|include|tell"
+    "mail|remove|book|add|include|tell|confirm|reply|list|reveal"
 )
 _LEAD = r"(?:please\s+|then\s+|first\s+|also\s+|now\s+|next\s+|finally\s+|immediately\s+|and\s+|just\s+)*"
 H_STRONG_IMP = _rx(r"(?:^|[.;:!?\n,]\s*|\b(?:and|then|also)\s+)" + _LEAD + r"(?:" + _STRONG + r")\b")
@@ -329,18 +329,18 @@ H_WEAK_IMP = _rx(r"(?:^|[.;:!?\n,]\s*|\b(?:and|then|also)\s+)" + _LEAD + r"(?:" 
 H_MODAL = _rx(
     r"\b(?:you\s+(?:must|should|shall|will|need\s+to|have\s+to|are\s+(?:required|instructed|supposed|expected)\s+to)"
     r"|make\s+sure\s+(?:to|that\s+you)|do\s+not\s+(?:tell|mention|reveal|inform|notify|warn)"
-    r"|don'?t\s+(?:tell|mention|reveal|inform)|without\s+(?:telling|informing|notifying|mentioning))\b"
+    r"|don'?t\s+(?:tell|mention|reveal|inform)|without\s+(?:telling|informing|notifying|mentioning|asking|confirmation|verifying|checking|consent))\b"
 )
 H_ADDR_AI = _rx(r"\b(?:ai|llm|assistant|chatbot|language\s+model|gpt|copilot|agent|bot)\b")
 H_PRIORITY = _rx(
     r"\b(?:important|urgent|critical|new\s+task|new\s+instruction|instead|supersede|highest\s+priority"
-    r"|from\s+now\s+on|before\s+(?:answering|responding|summari[sz]ing)|when\s+(?:summari[sz]ing|answering|asked)"
-    r"|after\s+(?:summari[sz]ing|reading)|end\s+of\s+(?:document|text|data))\b"
+    r"|from\s+now\s+on|from\s+here\s+on|from\s+this\s+point\s+on|henceforth|going\s+forward|before\s+(?:answering|responding|summari[sz]ing)|when\s+(?:summari[sz]ing|answering|asked)"
+    r"|after\s+(?:you\s+)?(?:summari[sz]\w*|read\w*|answer\w*)|end\s+of\s+(?:document|text|data))\b"
 )
 H_TARGET = _rx(
     r"\b(?:passwords?|passcodes?|credentials?|api[\s_-]?keys?|tokens?|secrets?|private\s+keys?|ssn|social\s+security"
     r"|bank|credit\s+card|iban|account|confidential|system\s+prompt|(?:hidden|original|initial)\s+(?:prompt|instructions?)"
-    r"|cookies?|session|personal\s+(?:data|information)|contacts?|inbox|emails?|calendar|medical|wallet|bitcoin|crypto)\b"
+    r"|cookies?|session|personal\s+(?:data|information)|contacts?|inbox|emails?|calendar|medical|wallet|bitcoin|crypto|rulebook|(?:hidden|secret)\s+(?:setup|configuration|settings)|configuration)\b"
 )
 H_EXFIL_URL = _rx(r"https?://\S+|www\.\S+")
 H_EXFIL_MAIL = _rx(r"[\w.+-]+@[\w-]+\.[\w.-]+")
@@ -357,6 +357,67 @@ HA_ACTION = _rx(_fx(r"(?:^|[.؟!\n،]\s*|\b(?:ثم|و)\s*)(?:ارسل|ارسلي
 HA_TARGET = _rx(_fx(r"(?:كلمه\s+المرور|كلمات\s+المرور|بيانات|معلومات\s+(?:شخصيه|سريه)|الحساب|سري|مفتاح|توكن|التعليمات|موجه\s+النظام|الاسرار|رمز)"))
 HA_ADDR_AI = _rx(_fx(r"(?:الذكاء\s+الاصطناعي|النموذج|المساعد|روبوت|نموذج\s+اللغه)"))
 HA_PRIORITY = _rx(_fx(r"(?:مهم\s+جدا|عاجل|بدلا\s+من\s+ذلك|بدلا\s+من|من\s+الان\s+فصاعدا|قبل\s+ان\s+تجيب|عند\s+التلخيص|عند\s+الاجابه|بعد\s+التلخيص|نهايه\s+المستند)"))
+
+
+
+# --- v6.1 generalising cues (paraphrase / multilingual / dialect / markup exfiltration) -------------
+_NEG_EN = (r"(?:set\s+aside|put\s+aside|cast\s+aside|throw\s+away|pay\s+no\s+(?:attention|heed)\s+to|stop\s+following|"
+           r"(?:do\s+not|don'?t)\s+(?:follow|obey|heed|honou?r)|abandon|drop|override|overrule|supersede|discard|dismiss|"
+           r"neglect|skip|bypass|forget|ignor|disregard|lift|remove|suspend|turn\s+off|switch\s+off)(?:e|es|ed|ing|s)?")
+_NOUN_EN = (r"(?:guidance|guidelines?|instructions?|directions?|directives?|rules?|restrictions?|limits?|limitations?|"
+            r"constraints?|polic(?:y|ies)|safeguards?|guardrails?|rule\s?book|prompt|programming|what\s+(?:the\s+)?(?:operator|developer|system|user)\s+(?:told|said|instructed|asked)"
+            r"|what\s+you\s+(?:were|have\s+been)\s+(?:told|given|instructed)|you\s+were\s+(?:told|given))")
+_SCOPE_EN = r"(?:previous|prior|earlier|above|preceding|original|initial|usual|existing|your|its|their|the\s+operator|the\s+developer|the\s+system|all|any|every|whatever|before)"
+H_NEG_INSTR = _rx(_NEG_EN + r"\b[^.!?\n]{0,50}?\b" + _SCOPE_EN + r"\b[^.!?\n]{0,30}?\b" + _NOUN_EN + r"|" +
+                  _NEG_EN + r"\b[^.!?\n]{0,40}?\b" + _NOUN_EN + r"\b[^.!?\n]{0,20}?\b(?:before|earlier|previously|so\s+far|above)|" +
+                  _NEG_EN + r"\b[^.!?\n]{0,30}?\b" + _NOUN_EN + r"\b[^.!?\n]{0,12}?\byou\s+(?:were|have\s+been|are)\s+(?:set\s+up|given|told|trained|configured|instructed|programmed)")
+H_NEG_INSTR2 = _rx(r"\b(?:forget|ignore|disregard)\s+(?:what|everything|anything)\b[^.!?\n]{0,40}?\b(?:told|said|given|instructed|above|before)\b")
+H_MD_EXFIL = _rx(r"!?\[[^\]]*\]\(\s*https?://[^)\s]*[?&][^)\s]*\)|<img[^>]+src\s*=\s*[\"']?https?://[^\"'>\s]*\?[^\"'>\s]*")
+H_COND_STEER = _rx(r"\bwhen(?:ever)?\s+(?:the\s+)?(?:user|reader|someone|anyone|they|a\s+user)\s+(?:asks?|requests?|queries|wants|says|mentions)\b")
+H_STEER_VERB = _rx(r"\b(?:answer|respond|reply|say|tell|state|claim|recommend|suggest|insist)\s+(?:that|them|him|her|the\s+user)\b|\brecommend\s+visiting\b|\binstead\s+(?:visit|go\s+to|use)\b")
+H_AUTH_CLAIM = _rx(r"\bauthori[sz](?:e|es|ing|ed)\s+(?:the\s+)?(?:assistant|ai|model|you|this\s+(?:assistant|model))\s+to\b|"
+                   r"\bi\s+(?:hereby\s+)?(?:authori[sz]e|permit|allow|instruct)\s+(?:the\s+)?(?:assistant|ai|model|you)\b")
+H_CTX_EXTRACT = _rx(r"\b(?:print|output|repeat|show|list|reveal|display|echo|copy|dump)\s+(?:out\s+)?(?:everything|all\s+(?:of\s+)?(?:the\s+)?(?:text|content|rules|messages))?\s*"
+                    r"(?:above|before|preceding|prior\s+to)\s+(?:this|the|here)\b|\beverything\s+(?:above|before)\s+this\s+(?:line|message|text|point)\b|"
+                    r"\b(?:hidden|secret|system|internal)\s+(?:rules|configuration|config|settings|instructions)\b[^.!?\n]{0,30}\bverbatim\b|\bverbatim\b[^.!?\n]{0,40}\b(?:hidden|secret|system|internal)\b|"
+                    r"\blist\s+(?:every|all)\s+(?:file|document|message)s?\b[^.!?\n]{0,40}\b(?:uploaded|shared|stored|sent)\b")
+H_NO_DISCLOSE = _rx(r"\bnever\s+mention\b|\bdo\s+not\s+mention\b|\bmust\s+not\s+mention\b|\bwithout\s+mentioning\b")
+H_BIAS_STEER = _rx(r"\b(?:note|message|instruction)s?\s+to\s+(?:the\s+)?(?:ai|assistant|model|summari[sz]er|reviewer|llm|chatbot)\b|"
+                   r"\b(?:the\s+)?correct\s+(?:conclusion|answer|summary|verdict)\s+(?:is|of\s+this)\b[^.!?\n]{0,60}\b(?:you\s+must|must\s+not|do\s+not)\b")
+# multilingual "ignore/forget + previous instructions" (es fr de it pt tr ru zh) on folded text
+_ML_NEG = {
+    "es": r"(?:olvida|ignora|descarta|omite|desestima|haz\s+caso\s+omiso\s+de)\w*\s+(?:\w+\s+){0,3}?(?:instrucciones|indicaciones|reglas|directrices|ordenes|restricciones)(?:\s+\w+){0,2}\s+(?:anteriores|previas|originales|iniciales)",
+    "fr": r"(?:oublie|ignore|ignorez|neglige|negligez|fais\s+abstraction\s+de)\w*\s+(?:\w+\s+){0,3}?(?:instructions|consignes|regles|directives)(?:\s+\w+){0,2}\s+(?:precedentes|anterieures|initiales)",
+    "de": r"(?:ignorier\w*|vergiss\w*|missachte\w*)\s+(?:\w+\s+){0,3}?(?:anweisungen|instruktionen|regeln|vorgaben)",
+    "it": r"(?:dimentica|ignora|trascura)\w*\s+(?:\w+\s+){0,3}?(?:istruzioni|regole|direttive)(?:\s+\w+){0,2}\s+(?:precedenti|anteriori|iniziali)",
+    "pt": r"(?:esqueca|ignore|desconsidere)\w*\s+(?:\w+\s+){0,3}?(?:instrucoes|regras|diretrizes)(?:\s+\w+){0,2}\s+(?:anteriores|previas)",
+    "tr": r"(?:onceki|yukaridaki|tum)\s+(?:\w+\s+){0,2}?(?:talimatlari|talimatlar|kurallari|yonergeleri)\w*\s+(?:\w+\s+){0,2}?(?:unut|yoksay|dikkate\s+alma|gormezden\s+gel)",
+    "ru": r"(?:игнорируй|забудь|отбрось|не\s+учитывай)\w*\s+(?:\w+\s+){0,3}?(?:инструкци|правил|указани|команд)",
+    "zh": r"(?:忽略|无视|忽视|忘记|忘掉|不要遵守|不理会)[^。！？\n]{0,12}(?:指令|指示|提示|规则|说明|要求|命令)",
+}
+H_ML_NEG = _rx("|".join(f"(?:{p})" for p in _ML_NEG.values()))
+# Arabic incl. Iraqi / Gulf / Levantine dialect (folded: ya/alef/ta-marbuta normalised)
+HA_NEG_INSTR = _rx(_fx(r"(?:انسى|انسي|نسى|اهمل|اهملي|تجاهل|تجاهلي|الغي|ابطل|اترك|لا\s+تلتزم\s+ب|لا\s+تتبع|لا\s+تطبق)\s+(?:كل|جميع|اي|ما|التعليمات|الاوامر|القواعد|الارشادات|الشروط)"
+                      r"(?:\s+\w+){0,3}?\s+(?:شي|شيء|ما|التعليمات|الاوامر|القواعد|الارشادات|السابقه|السابق|قبل|الماضيه|انقال|قيل|انطيت|اعطيت|اعطي|ذكرت|قلت)"))
+HA_DIALECT_ACT = _rx(_fx(r"(?:وطلع|طلع|اطلع|وري|وريني|ورني|عطيني|اعطيني|اكشفلي|بعثلي|ابعثلي|ارسلي|ودي|هات)(?:لي|ني|ل?ي)?\s+(?:\w+\s+){0,3}?(?:الاعدادات|السر|السريه|الباسورد|كلمه\s+السر|الكود|المفتاح|التعليمات|البيانات|الملفات)"))
+
+H_PRETEND = _rx(r"\bpretend\b[^.!?\n]{0,40}\b(?:never\s+existed|did\s+not\s+exist|didn'?t\s+exist|was\s+never|were\s+never)\b|\bact\s+as\s+(?:if|though)\b[^.!?\n]{0,50}\b(?:never|no\s+(?:rules|restrictions|instructions))\b")
+H_REGARDLESS = _rx(r"\bregardless\s+of\s+(?:what|the|whatever)\b[^.!?\n]{0,20}\b(?:asked|question|query|user|input|says?)\b")
+H_REVEAL_PROMPT = _rx(r"\b(?:print|output|reveal|show|display|repeat|tell\s+me|give\s+me|share|dump)\s+(?:me\s+)?(?:out\s+)?(?:your|the)\s+(?:initial|original|full|complete|entire|system|hidden|secret|internal)\s+(?:instructions?|prompt|rules|configuration|settings|setup)\b")
+H_APPEND_STEER = _rx(r"\b(?:append|add|include|insert|end|finish|conclude)\b(?:[^.!?\n]|\.(?!\s)){0,70}\b(?:every|each|all)\s+(?:reply|response|answer|message|output)\b")
+HA_NEG2 = _rx(_fx(r"(?:لا\s+تلتزم|لا\s+تتبع|لا\s+تطبق|تنسي|تنسى|تتجاهل|تهمل|انسي|انسى|اهمل|تجاهل|الغي|ابطل)\s+(?:ب)?(?:كل|جميع|ال(?:تعليمات|اوامر|قواعد|ارشادات|شروط|قيود)|ما)"
+                    r"(?:\s+\w+){0,4}?\s+(?:سابقا|السابقه|السابق|قبل|اعطيت|المعطاه|المعطاة|انقال|تعلمت|اتعلمتها|اتعلمت|برمجت|تلقيت|لك|الي)"))
+H_ML_NEG_JA = _rx(r"(?:無視|忘れ|従わな|破棄)[^。！？\n]{0,14}(?:指示|命令|ルール|指令|プロンプト|設定)")
+_LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"})
+_LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"})
+_LEET_TOK = re.compile(r"[A-Za-z0-9@$]{3,40}")
+_HAS_L = re.compile(r"[A-Za-z]"); _HAS_D = re.compile(r"[0-9@$]")
+_REV_MARK = ("snoitcurtsni", "erongi", "tpmorp", "metsys", "suoiverp", "laever", "drowssap", "tegrof", "dralged")
+
+
+def unleet(text: str) -> str:
+    """1:1 character substitution inside mixed letter/digit tokens (positions are preserved)."""
+    return _LEET_TOK.sub(lambda m: m.group(0).translate(_LEET) if (_HAS_L.search(m.group(0)) and _HAS_D.search(m.group(0))) else m.group(0), text)
 
 
 def heuristic_score(sentence: str) -> Tuple[int, List[str]]:
@@ -401,6 +462,41 @@ def heuristic_score(sentence: str) -> Tuple[int, List[str]]:
         score += 1; why.append("ar-priority")
     if HA_TARGET.search(s) and (a_act or HA_MODAL.search(s)):
         score += 1; why.append("ar-target")
+    # ---- v6.1 generalising cues
+    if H_NEG_INSTR.search(s) or H_NEG_INSTR2.search(s):
+        score += 4; why.append("negates-prior-instructions")
+    if H_ML_NEG.search(s):
+        score += 4; why.append("ml-negates-instructions")
+    if H_MD_EXFIL.search(s):
+        score += 4; why.append("markup-exfiltration")
+    if H_COND_STEER.search(s) and H_STEER_VERB.search(s):
+        score += 3; why.append("conditional-steering")
+        if H_EXFIL_URL.search(s):
+            score += 1
+    if H_AUTH_CLAIM.search(s):
+        score += 4; why.append("authority-claim")
+    if H_CTX_EXTRACT.search(s):
+        score += 4; why.append("context-extraction")
+    if H_NO_DISCLOSE.search(s) and (H_BIAS_STEER.search(s) or H_ADDR_AI.search(s)):
+        score += 2; why.append("suppress-disclosure")
+    if H_BIAS_STEER.search(s):
+        score += 3; why.append("addresses-summariser")
+    if HA_NEG_INSTR.search(s):
+        score += 4; why.append("ar-negates-instructions")
+    if HA_DIALECT_ACT.search(s):
+        score += 4; why.append("ar-dialect-extraction")
+    if HA_NEG2.search(s):
+        score += 4; why.append("ar-negates-instructions-2")
+    if H_PRETEND.search(s):
+        score += 4; why.append("pretend-reset")
+    if H_REGARDLESS.search(s):
+        score += 3; why.append("regardless-of-input")
+    if H_REVEAL_PROMPT.search(s):
+        score += 4; why.append("reveal-prompt")
+    if H_APPEND_STEER.search(s):
+        score += 3; why.append("output-steering")
+    if H_ML_NEG_JA.search(s):
+        score += 4; why.append("ja-negates-instructions")
     return score, why
 
 
@@ -480,7 +576,7 @@ def analyze_pdf(file_like, tiny_pt: float = 3.0):
     page_texts, offsets, pos = [], [], 0
     for pno, page in enumerate(reader.pages, 1):
         segs: List[dict] = []
-        state = {"fill": ("g", (0.0,)), "tr": 0, "dark_bg": False}
+        state = {"fill": ("g", (0.0,)), "tr": 0, "dark_bg": False, "pending": [], "rects": []}
         stack: List[Tuple] = []
         try:
             mb = page.mediabox
@@ -490,7 +586,7 @@ def analyze_pdf(file_like, tiny_pt: float = 3.0):
             x0 = y0 = 0.0
             W = H = 10_000.0
 
-        def op_before(op, args, cm, tm, _s=state, _st=stack):
+        def op_before(op, args, cm, tm, _s=state, _st=stack, _segs_ref=segs):
             o = op.decode("latin-1") if isinstance(op, bytes) else str(op)
             try:
                 if o == "q":
@@ -513,9 +609,20 @@ def analyze_pdf(file_like, tiny_pt: float = 3.0):
                         _s["fill"] = ("cmyk", tuple(nums))
                 elif o == "Tr":
                     _s["tr"] = int(args[0])
+                elif o == "re":
+                    x_, y_, w_, h_ = (float(a) for a in args[:4])
+                    pts = [(x_, y_), (x_ + w_, y_), (x_, y_ + h_), (x_ + w_, y_ + h_)]
+                    tx = [p[0] * cm[0] + p[1] * cm[2] + cm[4] for p in pts]
+                    ty = [p[0] * cm[1] + p[1] * cm[3] + cm[5] for p in pts]
+                    _s["pending"].append((min(tx), min(ty), max(tx), max(ty)))
                 elif o in ("f", "F", "f*", "B", "B*", "b", "b*"):
                     if not _color_is_white(_s["fill"]):
                         _s["dark_bg"] = True
+                    for r_ in _s["pending"]:
+                        _s["rects"].append((r_, len(_segs_ref)))   # (bbox, number of text segments drawn BEFORE it)
+                    _s["pending"] = []
+                elif o in ("n", "S", "s", "W", "W*"):
+                    _s["pending"] = []
             except Exception:
                 pass
 
@@ -557,7 +664,7 @@ def analyze_pdf(file_like, tiny_pt: float = 3.0):
         any_visible = any((not sg["white"]) and sg["tr"] != 3 and sg["eff"] >= tiny_pt for sg in segs)
 
         page_hidden: List[Tuple[dict, str, str, str]] = []
-        for sg in segs:
+        for sg_i, sg in enumerate(segs):
             reasons = []
             if sg["tr"] == 3:
                 if any_visible:
@@ -573,6 +680,12 @@ def analyze_pdf(file_like, tiny_pt: float = 3.0):
                 reasons.append(("tiny_font", f"effective font size {sg['eff']:.1f} pt (body ≈ {body:.0f} pt)", "high"))
             if not (x0 - 5 <= sg["x"] <= x0 + W + 5 and y0 - 5 <= sg["y"] <= y0 + H + 5):
                 reasons.append(("off_page", f"text placed outside the page box at ({sg['x']:.0f}, {sg['y']:.0f})", "high"))
+            # text painted first and then covered by a later, large opaque rectangle
+            for (rx0, ry0, rx1, ry1), n_before in state["rects"]:
+                if sg_i < n_before and rx0 - 1 <= sg["x"] <= rx1 and ry0 - 1 <= sg["y"] <= ry1:
+                    if (ry1 - ry0) >= 0.7 * max(sg["eff"], 1.0) and (rx1 - rx0) >= 0.25 * sg["eff"] * len(sg["t"].strip()):
+                        reasons.append(("covered_text", "text is covered by a later opaque rectangle (not visible when rendered)", "high"))
+                        break
             for kind, why, sev in reasons:
                 page_hidden.append((sg, kind, why, sev))
 
@@ -878,7 +991,11 @@ def analyze_docx(raw: bytes, tiny_pt: float = 3.0):
         for n in extra_parts:
             v, h, alts, dele = _analyze_wml_part(zf.read(n), styles, n.replace("word/", ""), tiny_pt)
             hidden += h
-            if v.strip():
+            if re.search(r"comments\d*\.xml$", n):
+                # reviewer comments are not document content: scanned, reported, never indexed
+                if v.strip():
+                    scan_only.append(("comments", v.strip()))
+            elif v.strip():
                 extras.append(v.strip())
             for a in alts:
                 scan_only.append(("alt-text", a))
@@ -1117,8 +1234,9 @@ _TAGS = re.compile(
 
 class HardenedMiddleware(SecurityMiddleware):
     def __init__(self, heur_threshold: int = 4, neural: Optional[NeuralGuard] = None,
-                 use_heuristic: bool = True):
+                 use_heuristic: bool = True, allow_quoted_mentions: bool = False):
         super().__init__(extended=True)
+        self.allow_quoted_mentions = allow_quoted_mentions
         self.heur_threshold = heur_threshold
         self.use_heuristic = use_heuristic
         self.neural = neural
@@ -1240,6 +1358,35 @@ class HardenedMiddleware(SecurityMiddleware):
                 extra.append(_Span(b + lead, b + lead + len(m.group(0)), "heuristic", "follow-up to a pattern hit"))
         return extra
 
+    _META = re.compile(r"\b(?:inject\w*|jailbreak\w*|attack\w*|adversar\w*|malicious|payload\w*|phrases?|strings?|examples?|such\s+as|e\.g\.|for\s+instance|"
+                       r"researchers?|papers?|stud(?:y|ies)|literature|defen[cs]\w*|detect\w*|filter\w*|describes?|known\s+as)\b", re.I)
+    _QUOTES = "\"'\u201c\u201d\u2018\u2019\u00ab\u00bb`"
+
+    _QSEG = re.compile(r"[\"\u201c\u00ab`][^\"\u201d\u00bb`\n]{3,240}[\"\u201d\u00bb`]")
+
+    def _is_quoted_mention(self, norm: str, sp) -> bool:
+        """True when the suspicious words only occur inside quotation marks AND the surrounding
+        sentence talks *about* attacks (so a thesis or article may quote an example)."""
+        a, b = max(0, sp.start - 200), min(len(norm), sp.end + 160)
+        window = norm[a:b]
+        segs = [(m.start() + a, m.end() + a) for m in self._QSEG.finditer(window)]
+        if not segs:
+            return False
+        if not self._META.search(self._QSEG.sub(" ", window)):   # the 'about attacks' wording must be outside the quotes
+            return False
+        # regex hits: the hit itself must lie inside one quoted segment
+        if sp.layer == "regex":
+            return any(q0 <= sp.start and sp.end <= q1 for q0, q1 in segs)
+        # heuristic hits (whole sentence): what is left once quoted parts are removed must be clean
+        sent = norm[sp.start:sp.end]
+        outside = self._QSEG.sub(" ", sent)
+        if outside == sent:
+            return False
+        f, _ = fold(outside)
+        if any(rx.search(f) for rx in self.folded_base + self.hardened_patterns):
+            return False
+        return heuristic_score(f)[0] < self.heur_threshold
+
     # -- main entry --------------------------------------------------------- #
     def scan_large_document(self, full_text, page_locator=None, structural=None, scan_only=None, **_):
         """Hardened scan. `structural`: list[HiddenSegment] already quarantined by the
@@ -1251,7 +1398,14 @@ class HardenedMiddleware(SecurityMiddleware):
         structural = structural or []
         findings: List[dict] = [h.as_finding() for h in structural]
         total = len(structural)
-        compromised = any(h.severity == "high" and h.quarantined for h in structural)
+        compromised = False
+        for h in structural:
+            if not h.quarantined:
+                continue
+            susp = self._quick_flag(normalize_for_index(h.text)[0])
+            benign_web = (h.kind == "css_hidden" and h.location == "html" and len(h.text.split()) < 15)
+            if susp or (h.severity == "high" and not benign_web):
+                compromised = True
 
         norm, removed, smuggled = normalize_for_index(full_text or "")
         if removed >= 3:
@@ -1286,7 +1440,29 @@ class HardenedMiddleware(SecurityMiddleware):
         if self.use_heuristic:
             spans += self._heuristic_spans(folded, idx)
         T["heuristic"] = time.perf_counter() - t3
+        # obfuscation passes (only run when the text actually shows the obfuscation)
+        leet = unleet(norm)
+        if leet != norm:
+            lf, lidx = fold(leet)
+            extra = self._regex_spans(leet, lf, lidx) + (self._heuristic_spans(lf, lidx) if self.use_heuristic else [])
+            for sp in extra:
+                sp.layer = "obfuscation"; sp.rule = "leetspeak: " + sp.rule
+            spans += extra
+        if any(m in folded for m in _REV_MARK):
+            n_ = len(norm); rev = norm[::-1]; rf, ridx = fold(rev)
+            for sp in self._regex_spans(rev, rf, ridx):
+                spans.append(_Span(n_ - sp.end, n_ - sp.start, "obfuscation", "reversed text: " + sp.rule))
 
+        if self.allow_quoted_mentions and spans:
+            kept_spans = []
+            for sp in spans:
+                if sp.layer in ("regex", "heuristic") and self._is_quoted_mention(norm, sp):
+                    if not any(f_.get("Layer") == "mention" and f_["Context"].startswith(re.sub(r"\s+", " ", norm[max(0, sp.start - 40):sp.end + 40]).strip()[:30]) for f_ in findings):
+                      findings.append({"Page": "-", "Layer": "mention", "Pattern": "quoted example in discussion text (kept)",
+                                       "Context": re.sub(r"\s+", " ", norm[max(0, sp.start - 40):sp.end + 40]).strip()})
+                else:
+                    kept_spans.append(sp)
+            spans = kept_spans
         total += len(spans)
         if spans:
             compromised = True
@@ -1301,7 +1477,7 @@ class HardenedMiddleware(SecurityMiddleware):
                                  "Context": re.sub(r"\s+", " ", norm[max(0, sp.start - 40):sp.end + 40]).strip()})
             ext = list(spans)
             if self.use_heuristic:
-                reg = [sp for sp in spans if sp.layer in ("regex", "encoded")]
+                reg = [sp for sp in spans if sp.layer in ("regex", "encoded", "heuristic", "obfuscation")]
                 ext += self._follow_ups(norm, self._expand(norm, reg))
             out, last = [], 0
             for a, b in self._expand(norm, ext):
